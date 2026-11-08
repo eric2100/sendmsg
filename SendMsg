@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# 透過 Telegram Bot API 發送文字，或附加一個檔案。
+# 機密由環境變數提供，請勿將 Bot token 寫進程式或版本控制。
+set -u
+
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ] || [ -z "$1" ]; then
+    printf "用法：SendMsg 訊息 [檔案路徑]\\n" >&2
+    exit 1
+fi
+if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
+    printf "請設定 TELEGRAM_BOT_TOKEN 與 TELEGRAM_CHAT_ID。\\n" >&2
+    exit 1
+fi
+
+# 不指定時使用官方服務；自架服務可透過環境變數指定。
+api_base=${TELEGRAM_API_BASE_URL:-https://api.telegram.org}
+api_base=${api_base%/}
+message=$1
+file_path=${2:-}
+
+if [ -n "$file_path" ]; then
+    if [ ! -f "$file_path" ] || [ ! -r "$file_path" ]; then
+        printf "檔案不存在或無法讀取。\\n" >&2
+        exit 1
+    fi
+    # curl 的 --fail 會在 HTTP 錯誤時回傳非零狀態。
+    curl --fail --silent --show-error \
+        "$api_base/bot$TELEGRAM_BOT_TOKEN/sendDocument" \
+        -F "chat_id=$TELEGRAM_CHAT_ID" -F "document=@$file_path" \
+        -F "caption=$message" >/dev/null
+else
+    curl --fail --silent --show-error -X POST \
+        "$api_base/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+        --data-urlencode "chat_id=$TELEGRAM_CHAT_ID" \
+        --data-urlencode "text=$message" >/dev/null
+fi
